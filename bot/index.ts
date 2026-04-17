@@ -7,16 +7,18 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const DATABASE_URL = process.env.DATABASE_URL;
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://your-domain.vercel.app';
 
-if (!BOT_TOKEN) {
-  throw new Error('❌ خطای بحرانی: توکن ربات پیدا نشد!');
-}
+if (!BOT_TOKEN) throw new Error('❌ توکن ربات پیدا نشد!');
+if (!DATABASE_URL) throw new Error('❌ DATABASE_URL در .env پیدا نشد!');
 
 // ==========================================
 // 🚀 اتصال به Prisma Postgres (Accelerate)
 // ==========================================
-const prisma = new PrismaClient().$extends(withAccelerate());
+const prisma = new PrismaClient({
+  datasourceUrl: DATABASE_URL,
+}).$extends(withAccelerate());
 
 // ==========================================
 // 🌐 تنظیم پراکسی و راه‌اندازی ربات
@@ -90,9 +92,6 @@ bot.command('start', async (ctx) => {
   }
 });
 
-// ==========================================
-// 🛡️ مدیریت خطاها
-// ==========================================
 bot.catch((err) => {
   console.error('❌ خطای داخلی ربات:', err.message);
 });
