@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  /* 
+    🎨 جادوی Light/Dark: تلگرام رنگ‌های گوشی کاربر را به عنوان متغیر CSS به ما می‌دهد.
+    ما از تابع var() استفاده می‌کنیم تا اول رنگ تلگرام را بخوانیم و اگر خارج از تلگرام بودیم (در مرورگر)، 
+    رنگ‌های لوکس دیفالت (Dark) را اعمال کنیم.
+  */
+  --color-tg-bg: var(--tg-theme-bg-color, #0B0E14);
+  --color-tg-secondary-bg: var(--tg-theme-secondary-bg-color, #1a1d24);
+  --color-tg-text: var(--tg-theme-text-color, #FFFFFF);
+  --color-tg-hint: var(--tg-theme-hint-color, #9CA3AF);
+  --color-tg-link: var(--tg-theme-link-color, #6366F1);
+  --color-tg-button: var(--tg-theme-button-color, #6366F1);
+  --color-tg-button-text: var(--tg-theme-button-text-color, #FFFFFF);
+
+  /* رنگ‌های لوکس پایه ما (برای گرادیانت‌ها و نئون‌ها) */
+  --color-primary: #6366F1; /* Indigo-500 */
+  --color-accent: #8B5CF6; /* Purple-500 */
+  --color-gold: #F59E0B; /* Amber-500 */
+
+  /* افکت‌های شیشه‌ای که باید روی تم روشن و تاریک کار کنند */
+  --color-glass-panel: color-mix(in srgb, var(--tg-theme-text-color, #FFF) 5%, transparent);
+  --color-glass-border: color-mix(in srgb, var(--tg-theme-text-color, #FFF) 10%, transparent);
+}
+
+@layer base {
+  body {
+    /* پس‌زمینه اصلی همیشه همرنگ بک‌گراند تلگرام کاربر است */
+    background-color: var(--color-tg-bg);
+    color: var(--color-tg-text);
+    
+    font-family: var(--font-outfit), var(--font-doran), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior-y: none;
+    touch-action: pan-y;
+    
+    /* یک ترنزیشن نرم برای وقتی که کاربر تو خود تلگرام تم رو عوض میکنه */
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
