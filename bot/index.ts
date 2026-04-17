@@ -1,10 +1,8 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import BetterSqlite3 from 'better-sqlite3';
+import { withAccelerate } from '@prisma/extension-accelerate';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import * as dotenv from 'dotenv';
-import path from 'path';
 
 dotenv.config();
 
@@ -16,17 +14,9 @@ if (!BOT_TOKEN) {
 }
 
 // ==========================================
-// 🚀 اتصال تضمینی به دیتابیس SQLite
+// 🚀 اتصال به Prisma Postgres (Accelerate)
 // ==========================================
-// مسیر مطلق فایل دیتابیس را می‌سازیم
-const dbPath = path.resolve(process.cwd(), 'prisma', 'dev.db');
-
-// موتور دیتابیس را مستقیماً با مسیر مطلق باز می‌کنیم
-const sqliteDb = new BetterSqlite3(dbPath);
-
-// آداپتور را با نمونه دیتابیس می‌سازیم
-const adapter = new PrismaBetterSqlite3(sqliteDb);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient().$extends(withAccelerate());
 
 // ==========================================
 // 🌐 تنظیم پراکسی و راه‌اندازی ربات
@@ -43,7 +33,7 @@ const bot = new Bot(BOT_TOKEN, {
 });
 
 // ==========================================
-// 🟢 موتور پردازش دستور /start (ثبت‌نام خودکار)
+// 🟢 دستور /start
 // ==========================================
 bot.command('start', async (ctx) => {
   const tgUser = ctx.from;
@@ -75,15 +65,14 @@ bot.command('start', async (ctx) => {
     );
 
     const welcomeMessage = `
-🌟 *سلام ${dbUser.firstName} عزیز، به Premium VPN خوش آمدی\!*
+🌟 *سلام ${dbUser.firstName} عزیز\!*
 
 آیدی سیستم شما: \`${dbUser.id.slice(-6).toUpperCase()}\`
 موجودی فعلی: *${dbUser.balance} USDT*
 
-اینجا نسل جدیدی از اینترنت آزاد است\. 
-امنیت، سرعت و پینگ پایین را با ما تجربه کن\.
+امنیت\u060c سرعت و پینگ پایین را با ما تجربه کن\.
 
-👇 *برای خرید اشتراک و مدیریت حساب روی دکمه زیر کلیک کن:*
+👇 *برای خرید اشتراک روی دکمه زیر کلیک کن:*
     `;
 
     await ctx.api.editMessageText(
@@ -102,7 +91,7 @@ bot.command('start', async (ctx) => {
 });
 
 // ==========================================
-// 🛡️ مدیریت خطاها و روشن کردن سرور
+// 🛡️ مدیریت خطاها
 // ==========================================
 bot.catch((err) => {
   console.error('❌ خطای داخلی ربات:', err.message);
@@ -111,5 +100,5 @@ bot.catch((err) => {
 process.once('SIGINT', () => { prisma.$disconnect(); bot.stop(); });
 process.once('SIGTERM', () => { prisma.$disconnect(); bot.stop(); });
 
-console.log('🚀 موتور ربات تلگرام و Prisma با موفقیت روشن شد...');
+console.log('🚀 ربات تلگرام با Prisma Accelerate با موفقیت روشن شد...');
 bot.start();

@@ -6,13 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "bot": "tsx bot/index.ts"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "@prisma/extension-accelerate": "^1.0.0",
     "@telegram-apps/sdk-react": "^3.3.9",
-    "better-sqlite3": "^12.9.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
