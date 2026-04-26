@@ -1,164 +1,108 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  UserCircle, 
-  ShieldCheck, 
-  Settings, 
-  Bell, 
-  Globe, 
-  HeadphonesIcon, 
-  LogOut,
-  ChevronLeft
-} from 'lucide-react';
-import { cn } from '@/components/layout/BottomNav';
+import Link from 'next/link';
+import { User, Copy, Zap, Globe2, Briefcase } from 'lucide-react';
 
 export default function ProfilePage() {
-  // گرفتن اطلاعات کاربر از تلگرام به صورت زنده
-  const [user, setUser] = useState<{ id: number; firstName: string; username?: string } | null>(null);
+  const [userData, setUserData] = useState<any>(null);
 
   useEffect(() => {
-    // 🔮 اگر اپ در محیط تلگرام باز شود، اطلاعات واقعی را می‌گیرد
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-      setUser({
-        id: tgUser.id,
-        firstName: tgUser.first_name,
-        username: tgUser.username
-      });
-    } else {
-      // دیتای تستی برای زمانی که در مرورگر کامپیوتر هستیم
-      setUser({ id: 123456789, firstName: "کاربر VIP", username: "premium_user" });
+    const tg = (window as any).Telegram?.WebApp;
+    const user = tg?.initDataUnsafe?.user;
+    if (user) {
+      fetch('/api/user', {
+        method: 'POST',
+        body: JSON.stringify({ telegramId: user.id })
+      }).then(res => res.json()).then(data => setUserData(data));
     }
   }, []);
 
-  // شبیه‌سازی لرزش برای دکمه‌های تنظیمات
-  const handleItemClick = () => {
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.HapticFeedback) {
-      window.Telegram.WebApp.HapticFeedback.selectionChanged();
-    }
+  const copyConfig = (url: string) => {
+    navigator.clipboard.writeText(url);
+    const tg = (window as any).Telegram?.WebApp;
+    tg?.showAlert("کانفیگ کپی شد! در برنامه V2Ray وارد کنید.");
+    tg?.HapticFeedback.impactOccurred('medium');
   };
 
   return (
-    <div className="flex flex-col gap-6 min-h-screen pt-4 px-2">
-      
-      {/* 🎭 هدر و اطلاعات کاربر (Avatar Section) */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center justify-center text-center mt-2 relative"
-      >
-        {/* آواتار درخشان */}
-        <div className="relative mb-4">
-          <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl animate-pulse"></div>
-          <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 p-1 shadow-[0_0_30px_rgba(99,102,241,0.3)]">
-            <div className="flex items-center justify-center w-full h-full rounded-full bg-[#0B0E14] border-2 border-indigo-400/50">
-              <UserCircle size={48} className="text-indigo-300/80" strokeWidth={1.5} />
-            </div>
+    <div className="flex flex-col gap-6 p-4 pb-28 text-white">
+      {/* بخش کاربری */}
+      <div className="flex items-center gap-4 bg-white/5 p-6 rounded-[2.5rem] border border-white/10">
+        <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+          <User size={32} />
+        </div>
+        <div className="flex flex-col">
+          <h2 className="text-xl font-black">{userData?.firstName || 'کاربر تایتان'}</h2>
+          <span className="text-sm text-white/40">@{userData?.username || 'Guest'}</span>
+        </div>
+      </div>
+
+      {/* آمار */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col gap-1">
+          <span className="text-[10px] text-white/40 uppercase">وضعیت حساب</span>
+          <span className={`text-sm font-bold ${userData?.isVip ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {userData?.isVip ? '💎 پرمیوم VIP' : 'رایگان'}
+          </span>
+        </div>
+        <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col gap-1">
+          <span className="text-[10px] text-white/40 uppercase">دعوت شده‌ها</span>
+          <span className="text-sm font-bold text-indigo-400">0 نفر</span>
+        </div>
+      </div>
+
+      {/* 🚀 منوی دسترسی سریع (اضافه شده در اینجا) */}
+      <div className="flex flex-col gap-3">
+        <Link href="/servers" className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-all">
+          <div className="flex items-center gap-3">
+            <Globe2 className="text-indigo-400" size={20} /> 
+            <span className="font-bold text-sm">رادار سرورها</span>
           </div>
-          {/* بج تاییدیه VIP */}
-          <div className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#0B0E14]">
-            <ShieldCheck size={20} className="text-emerald-400 fill-emerald-400/20" />
+        </Link>
+
+        <Link href="/agent" className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-all">
+          <div className="flex items-center gap-3">
+            <Briefcase className="text-amber-400" size={20} /> 
+            <span className="font-bold text-sm">پنل همکاران و نمایندگی</span>
           </div>
+        </Link>
+      </div>
+
+      {/* لیست اشتراک‌ها */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between px-2">
+          <h3 className="text-lg font-black flex items-center gap-2">
+            <Zap className="text-amber-400" size={20} /> سرویس‌های من
+          </h3>
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-1">
-          {user?.firstName || 'در حال بارگذاری...'}
-        </h1>
-        <p className="text-sm font-medium text-white/50 font-outfit tracking-wide">
-          {user?.username ? `@${user.username}` : `ID: ${user?.id}`}
-        </p>
-      </motion.div>
-
-      {/* 📦 کارت وضعیت اشتراک فعلی (Subscription Status) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="relative overflow-hidden rounded-[2rem] p-6 bg-white/[0.03] border border-white/10"
-      >
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-sm font-bold text-white/70">اشتراک فعلی شما</span>
-          <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">فعال</span>
-        </div>
-        
-        <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-2xl font-black text-white">پلن پرو</span>
-          <span className="text-sm font-medium text-white/50">(۳ ماهه)</span>
-        </div>
-        
-        {/* Progress Bar حجم/زمان */}
-        <div className="mt-4 flex flex-col gap-2">
-          <div className="flex justify-between text-xs text-white/60">
-            <span>۴۵ روز باقی‌مانده</span>
-            <span>حجم نامحدود</span>
+        {userData?.subscriptions?.length > 0 ? (
+          userData.subscriptions.map((sub: any) => (
+            <div key={sub.id} className="bg-white/5 border border-white/10 p-5 rounded-3xl flex flex-col gap-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-bold">{sub.planName}</h4>
+                  <span className="text-[10px] text-white/40 italic">انقضا: {new Date(sub.expiresAt).toLocaleDateString('fa-IR')}</span>
+                </div>
+                <button 
+                  onClick={() => copyConfig(sub.configUrl)}
+                  className="bg-indigo-600/20 text-indigo-400 p-2 rounded-xl border border-indigo-500/20 active:scale-95 transition-all"
+                >
+                  <Copy size={18} />
+                </button>
+              </div>
+              <div className="bg-black/30 p-2 rounded-lg text-[10px] font-mono text-white/30 truncate">
+                {sub.configUrl}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-10 bg-white/5 rounded-3xl border border-dashed border-white/10 opacity-50">
+            <p className="text-sm">هنوز هیچ اشتراکی خریداری نشده است.</p>
           </div>
-          <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-1/2 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ⚙️ لیست تنظیمات و دسترسی‌ها (iOS Style Glass List) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="flex flex-col gap-2"
-      >
-        <span className="text-xs font-bold text-white/40 ml-2 mb-1 uppercase tracking-wider">تنظیمات حساب</span>
-        
-        <div className="flex flex-col rounded-[2rem] bg-white/[0.02] border border-white/5 overflow-hidden">
-          
-          {/* آیتم ۱: زبان */}
-          <button onClick={handleItemClick} className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform"><Globe size={20} /></div>
-              <span className="text-sm font-bold text-white/80">زبان برنامه (Language)</span>
-            </div>
-            <div className="flex items-center gap-2 text-white/40">
-              <span className="text-xs font-medium">فارسی</span>
-              <ChevronLeft size={16} />
-            </div>
-          </button>
-
-          {/* آیتم ۲: اعلان‌ها */}
-          <button onClick={handleItemClick} className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform"><Bell size={20} /></div>
-              <span className="text-sm font-bold text-white/80">اطلاع‌رسانی اتمام حجم</span>
-            </div>
-            <div className="w-10 h-6 rounded-full bg-indigo-500 relative flex items-center px-1 transition-colors">
-              <div className="w-4 h-4 rounded-full bg-white absolute right-1"></div>
-            </div>
-          </button>
-
-          {/* آیتم ۳: پشتیبانی */}
-          <button onClick={handleItemClick} className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors group">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform"><HeadphonesIcon size={20} /></div>
-              <span className="text-sm font-bold text-white/80">پشتیبانی آنلاین (24/7)</span>
-            </div>
-            <ChevronLeft size={16} className="text-white/40" />
-          </button>
-
-        </div>
-      </motion.div>
-
-      {/* 🚪 دکمه خروج/قطع اتصال (با رنگ هشدار ملایم) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="mt-2 mb-6"
-      >
-        <button onClick={handleItemClick} className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors">
-          <LogOut size={20} />
-          <span className="text-sm font-bold">خروج از حساب کاربری</span>
-        </button>
-      </motion.div>
-
+        )}
+      </div>
     </div>
   );
 }

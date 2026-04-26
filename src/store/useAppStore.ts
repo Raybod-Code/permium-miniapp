@@ -1,39 +1,44 @@
-// src/store/useAppStore.ts
 import { create } from 'zustand';
 
-// تعریف دقیق تایپ‌ها (TypeScript Best Practices)
-interface NotificationType {
-  message: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-}
-
 interface AppState {
-  // 💰 اطلاعات مالی و کاربر
+  user: any | null;
   balance: number;
-  updateBalance: (amount: number) => void;
-  
-  // 🎨 تم گوشی (Light/Dark)
-  theme: 'dark' | 'light';
-  setTheme: (theme: 'dark' | 'light') => void;
-  
-  // 🔔 سیستم نوتیفیکیشن زنده (In-App Push)
-  notification: NotificationType | null;
-  showNotification: (message: string, type: NotificationType['type']) => void;
-  clearNotification: () => void;
+  isLoading: boolean;
+  fetchUser: (telegramId: string) => Promise<void>;
+  setBalance: (newBalance: number) => void;
+  updateUserSubscriptions: (newSub: any) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  balance: 14.50, // موجودی اولیه (بعدا از دیتابیس می‌آید)
-  updateBalance: (amount) => set((state) => ({ balance: state.balance + amount })),
+  user: null,
+  balance: 0,
+  isLoading: false,
   
-  theme: 'dark',
-  setTheme: (theme) => set({ theme }),
-
-  notification: null,
-  showNotification: (message, type) => {
-    set({ notification: { message, type } });
-    // نوتیفیکیشن بعد از ۳ ثانیه خودکار محو می‌شود
-    setTimeout(() => set({ notification: null }), 3000);
+  // دریافت اطلاعات کاربر فقط یک بار و ذخیره در کل اپلیکیشن
+  fetchUser: async (telegramId) => {
+    set({ isLoading: true });
+    try {
+      const res = await fetch('/api/user', {
+        method: 'POST',
+        body: JSON.stringify({ telegramId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        set({ user: data, balance: data.balance || 0, isLoading: false });
+      }
+    } catch (error) {
+      console.error("Store Error:", error);
+      set({ isLoading: false });
+    }
   },
-  clearNotification: () => set({ notification: null }),
+
+  setBalance: (balance) => set({ balance }),
+  
+  updateUserSubscriptions: (newSub) => 
+    set((state) => ({
+      user: {
+        ...state.user,
+        subscriptions: [...(state.user?.subscriptions || []), newSub]
+      }
+    })),
 }));

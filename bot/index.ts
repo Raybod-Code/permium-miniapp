@@ -6,7 +6,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEB_APP_URL = process.env.WEB_APP_URL || 'https://your-domain.vercel.app';
+const WEB_APP_URL = process.env.WEB_APP_URL || 'http://46.226.161.214:3000';
 
 if (!BOT_TOKEN) throw new Error('❌ توکن ربات پیدا نشد!');
 if (!process.env.DATABASE_URL) throw new Error('❌ DATABASE_URL در .env پیدا نشد!');

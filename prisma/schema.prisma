@@ -3,15 +3,66 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id         String   @id @default(cuid())
-  telegramId BigInt   @unique
-  firstName  String
-  username   String?
-  balance    Float    @default(0.0)
-  role       String   @default("USER")
-  createdAt  DateTime @default(now())
+  id            Int            @id @default(autoincrement())
+  telegramId    BigInt         @unique
+  firstName     String?
+  username      String?
+  balance       Float          @default(0.0)
+  
+  // 🛡️ سطوح دسترسی
+  role          String         @default("USER") // USER, AGENT, ADMIN
+  
+  // 🎡 گردونه شانس
+  lastSpinDate  DateTime?
+  
+  // 🔗 دعوت و نمایندگی
+  referralCode  String         @unique @default(uuid())
+  referredBy    BigInt?
+  agentDiscount Int            @default(0) // درصد تخفیف اختصاصی برای نماینده
+  
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  transactions  Transaction[]
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  planName    String
+  configUrl   String   // لینک VLESS
+  subLink     String?  // 🚀 لینک هوشمند سابسکریپشن (Sub Link)
+  status      String   @default("ACTIVE")
+  dataLimit   Float?   // به گیگابایت
+  dataUsed    Float    @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  type        String   // PURCHASE, DEPOSIT, AGENT_UPGRADE, GIFT
+  status      String   @default("PENDING") // PENDING, COMPLETED, REJECTED
+  description String?  // اینجا TXID تتر هم ذخیره می‌شود
+  createdAt   DateTime @default(now())
+}
+
+// 🎟️ کدهای تخفیف و هدیه
+model PromoCode {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  discount    Int      // درصد تخفیف
+  usageLimit  Int      @default(1)
+  usedCount   Int      @default(0)
+  expiresAt   DateTime
 }
