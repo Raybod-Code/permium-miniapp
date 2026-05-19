@@ -1,80 +1,173 @@
-import { Bot, InlineKeyboard } from 'grammy';
+// bot/index.ts
+// ربات تلگرام — Webhook mode (production-ready)
+import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 import { PrismaClient } from '@prisma/client';
-import { SocksProxyAgent } from 'socks-proxy-agent';
 import * as dotenv from 'dotenv';
+import http from 'http';
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEB_APP_URL = process.env.WEB_APP_URL || 'http://46.226.161.214:3000';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
+const WEB_APP_URL = process.env.WEB_APP_URL!;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET!;
+const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID!;
 
-if (!BOT_TOKEN) throw new Error('❌ توکن ربات پیدا نشد!');
-if (!process.env.DATABASE_URL) throw new Error('❌ DATABASE_URL در .env پیدا نشد!');
+if (!BOT_TOKEN) throw new Error('❌ TELEGRAM_BOT_TOKEN پیدا نشد!');
+if (!WEB_APP_URL) throw new Error('❌ WEB_APP_URL پیدا نشد!');
 
-// Prisma خودکار DATABASE_URL را از .env می‌خوند
 const prisma = new PrismaClient();
 
-const socksAgent = new SocksProxyAgent('socks5://127.0.0.1:10808');
+const bot = new Bot(BOT_TOKEN);
 
-const bot = new Bot(BOT_TOKEN, {
-  client: {
-    baseFetchConfig: {
-      agent: socksAgent,
-      compress: true,
-    },
-  },
-});
-
+// ─── /start Command ──────────────────────────────────────────
 bot.command('start', async (ctx) => {
   const tgUser = ctx.from;
   if (!tgUser) return;
 
-  const loadingMsg = await ctx.reply('⏳ در حال بررسی اطلاعات حساب شما...');
-
   try {
-    let dbUser = await prisma.user.findUnique({
+    // Upsert کاربر
+    const user = await prisma.user.upsert({
       where: { telegramId: BigInt(tgUser.id) },
+      update: {
+        firstName: tgUser.first_name,
+        username: tgUser.username || undefined,
+      },
+      create: {
+        telegramId: BigInt(tgUser.id),
+        firstName: tgUser.first_name,
+        username: tgUser.username || null,
+        role: BigInt(tgUser.id).toString() === ADMIN_ID ? 'ADMIN' : 'USER',
+      },
+      include: {
+        subscriptions: { where: { status: 'ACTIVE' } },
+      },
     });
 
-    if (!dbUser) {
-      dbUser = await prisma.user.create({
-        data: {
-          telegramId: BigInt(tgUser.id),
-          firstName: tgUser.first_name,
-          username: tgUser.username || null,
-          balance: 0.0,
-          role: 'USER',
-        },
-      });
-      console.log(`👤 کاربر جدید: ${tgUser.first_name} (${tgUser.id})`);
-    }
-
+    const hasActive = user.subscriptions.length > 0;
     const keyboard = new InlineKeyboard().webApp(
-      '🚀 ورود به پلتفرم VIP',
+      hasActive ? '🚀 مدیریت اشتراک' : '🛒 خرید اشتراک VPN',
       WEB_APP_URL,
     );
 
-    await ctx.api.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      `🌟 *سلام ${dbUser.firstName} عزیز\!*
+    const balanceStr = parseFloat(user.balance.toString()).toFixed(2);
 
-آیدی: \`${dbUser.id.slice(-6).toUpperCase()}\`
-موجودی: *${dbUser.balance} USDT*
+    await ctx.reply(
+      `🌟 *سلام ${escapeMarkdown(user.firstName || 'کاربر')} عزیز\!*
 
-👇 *برای خرید اشتراک روی دکمه زیر کلیک کن:*`,
-      { parse_mode: 'MarkdownV2', reply_markup: keyboard },
+${hasActive
+  ? '✅ اشتراک فعال داری\. از دکمه زیر مدیریت کن:'
+  : '👋 به Premium VPN خوش اومدی\!\n\n🔐 *امن، سریع، بدون محدودیت*'
+}
+
+💰 موجودی: *${balanceStr} USDT*
+👤 آیدی: \`${user.id}\``,
+      {
+        parse_mode: 'MarkdownV2',
+        reply_markup: keyboard,
+      },
     );
   } catch (error) {
-    console.error('❌ خطا:', error);
-    await ctx.reply('⚠️ متأسفانه در ارتباط با پایگاه داده مشکلی پیش آمد.');
+    console.error('❌ /start error:', error);
+    await ctx.reply('⚠️ مشکلی پیش اومد. لطفاً دوباره تلاش کن.');
   }
 });
 
-bot.catch((err) => console.error('❌ خطای ربات:', err.message));
+// ─── /balance Command ────────────────────────────────────────
+bot.command('balance', async (ctx) => {
+  const tgUser = ctx.from;
+  if (!tgUser) return;
 
-process.once('SIGINT', () => { prisma.$disconnect(); bot.stop(); });
-process.once('SIGTERM', () => { prisma.$disconnect(); bot.stop(); });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { telegramId: BigInt(tgUser.id) },
+      select: { balance: true, firstName: true },
+    });
 
-console.log('🚀 ربات با موفقیت روشن شد...');
-bot.start();
+    if (!user) {
+      await ctx.reply('ابتدا با /start ثبت‌نام کن.');
+      return;
+    }
+
+    const balance = parseFloat(user.balance.toString()).toFixed(2);
+    await ctx.reply(`💰 موجودی کیف پول: *${balance} USDT*`, {
+      parse_mode: 'Markdown',
+    });
+  } catch (error) {
+    console.error('❌ /balance error:', error);
+  }
+});
+
+// ─── /admin Command (فقط ادمین) ──────────────────────────────
+bot.command('admin', async (ctx) => {
+  if (ctx.from?.id.toString() !== ADMIN_ID) {
+    await ctx.reply('⛔ دسترسی ندارید.');
+    return;
+  }
+
+  try {
+    const [totalUsers, activeSubscriptions, pendingDeposits] = await Promise.all([
+      prisma.user.count(),
+      prisma.subscription.count({ where: { status: 'ACTIVE' } }),
+      prisma.depositRequest.count({ where: { status: 'PENDING' } }),
+    ]);
+
+    await ctx.reply(
+      `📊 *پنل ادمین — آمار سریع*
+
+👥 کاربران: *${totalUsers}*
+✅ اشتراک فعال: *${activeSubscriptions}*
+⏳ واریز در انتظار: *${pendingDeposits}*`,
+      { parse_mode: 'Markdown' },
+    );
+  } catch (error) {
+    console.error('❌ /admin error:', error);
+  }
+});
+
+// ─── Error Handler ───────────────────────────────────────────
+bot.catch((err) => {
+  console.error('❌ Bot error:', err.message);
+});
+
+// ─── Cleanup ─────────────────────────────────────────────────
+process.once('SIGINT', async () => { await prisma.$disconnect(); bot.stop(); });
+process.once('SIGTERM', async () => { await prisma.$disconnect(); bot.stop(); });
+
+// ─── Start Mode ──────────────────────────────────────────────
+const USE_WEBHOOK = process.env.NODE_ENV === 'production';
+
+if (USE_WEBHOOK) {
+  // Webhook mode برای production
+  const handleUpdate = webhookCallback(bot, 'http');
+  const server = http.createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/bot-webhook') {
+      // بررسی Secret Token
+      const secret = req.headers['x-telegram-bot-api-secret-token'];
+      if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
+        res.writeHead(401);
+        res.end('Unauthorized');
+        return;
+      }
+      await handleUpdate(req, res);
+    } else {
+      res.writeHead(200);
+      res.end('Bot is running!');
+    }
+  });
+
+  const PORT = parseInt(process.env.BOT_PORT || '4000', 10);
+  server.listen(PORT, () => {
+    console.log(`🚀 Bot webhook server listening on port ${PORT}`);
+  });
+} else {
+  // Polling mode برای development (بدون نیاز به پروکسی)
+  console.log('🔄 Bot running in polling mode (development)...');
+  bot.start({
+    onStart: () => console.log('✅ Bot started successfully!'),
+  });
+}
+
+// ─── Helper ──────────────────────────────────────────────────
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}

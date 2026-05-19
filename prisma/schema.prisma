@@ -1,68 +1,268 @@
+// ============================================================
+// PREMIUM VPN MINIAPP — Prisma Schema v2.0
+// Provider: PostgreSQL (Neon.tech)
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+// ============================================================
+// USER — کاربر اصلی (یوزر، نماینده، ادمین)
+// ============================================================
 model User {
-  id            Int            @id @default(autoincrement())
-  telegramId    BigInt         @unique
-  firstName     String?
-  username      String?
-  balance       Float          @default(0.0)
-  
-  // 🛡️ سطوح دسترسی
-  role          String         @default("USER") // USER, AGENT, ADMIN
-  
+  id           Int      @id @default(autoincrement())
+  telegramId   BigInt   @unique
+  firstName    String?
+  lastName     String?
+  username     String?
+  photoUrl     String?
+  languageCode String?  @default("fa")
+
+  // 💰 کیف پول
+  balance      Decimal  @default(0) @db.Decimal(10, 4)
+
+  // 🛡️ سطح دسترسی
+  role         UserRole @default(USER)
+  isBanned     Boolean  @default(false)
+  banReason    String?
+
   // 🎡 گردونه شانس
-  lastSpinDate  DateTime?
-  
-  // 🔗 دعوت و نمایندگی
-  referralCode  String         @unique @default(uuid())
-  referredBy    BigInt?
-  agentDiscount Int            @default(0) // درصد تخفیف اختصاصی برای نماینده
-  
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  lastSpinDate DateTime?
+  totalSpins   Int      @default(0)
 
-  transactions  Transaction[]
+  // 🔗 سیستم رفرال و نمایندگی
+  referralCode   String   @unique @default(cuid())
+  referredBy     Int?     // userId معرف
+  referrer       User?    @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals      User[]   @relation("UserReferrals")
+  referralEarned Decimal  @default(0) @db.Decimal(10, 4)
+
+  // 🏪 اطلاعات نمایندگی
+  agentDiscount     Int      @default(0)   // درصد تخفیف برای نماینده
+  agentCommission   Int      @default(10)  // درصد کمیسیون از فروش
+  agentBrandName    String?               // نام برند سفارشی
+  agentBrandLogo    String?               // لوگوی سفارشی
+  agentMaxUsers     Int      @default(0)   // 0 = نامحدود
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
   subscriptions Subscription[]
+  transactions  Transaction[]
+  devices       Device[]
+  depositRequests DepositRequest[]
+
+  @@index([telegramId])
+  @@index([referralCode])
+  @@index([role])
 }
 
+enum UserRole {
+  USER
+  AGENT
+  ADMIN
+}
+
+// ============================================================
+// SUBSCRIPTION — اشتراک VPN
+// ============================================================
 model Subscription {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id])
-  planName    String
-  configUrl   String   // لینک VLESS
-  subLink     String?  // 🚀 لینک هوشمند سابسکریپشن (Sub Link)
-  status      String   @default("ACTIVE")
-  dataLimit   Float?   // به گیگابایت
-  dataUsed    Float    @default(0)
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // اطلاعات پلن
+  planName  String
+  planId    String           // شناسه پلن برای مرجع
+
+  // اطلاعات اتصال
+  clientId  String           @unique @default(uuid()) // UUID در 3x-ui
+  email     String           @unique // شناسه کلاینت در 3x-ui: tgId_timestamp
+  configUrl String           // لینک VLESS/VMESS
+  subLink   String?          // لینک سابسکریپشن هوشمند
+  inboundId Int              // شماره inbound در 3x-ui
+
+  // وضعیت
+  status    SubscriptionStatus @default(ACTIVE)
+
+  // مصرف
+  dataLimitGB  Decimal?    @db.Decimal(10, 2) // null = نامحدود
+  dataUsedGB   Decimal     @default(0) @db.Decimal(10, 2)
+  lastSyncAt   DateTime?   // آخرین sync با 3x-ui
+
+  // زمان
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  PENDING
+}
+
+// ============================================================
+// DEVICE — دستگاه‌های متصل به اشتراک
+// ============================================================
+model Device {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId Int?
+
+  name           String   // "iPhone 13 Pro"
+  deviceType     String   @default("UNKNOWN") // MOBILE, DESKTOP, TABLET
+  lastIp         String?
+  lastSeenAt     DateTime @default(now())
+  isActive       Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================================
+// TRANSACTION — تراکنش مالی
+// ============================================================
 model Transaction {
-  id          Int      @id @default(autoincrement())
+  id          Int               @id @default(autoincrement())
   userId      Int
-  user        User     @relation(fields: [userId], references: [id])
-  amount      Float
-  type        String   // PURCHASE, DEPOSIT, AGENT_UPGRADE, GIFT
-  status      String   @default("PENDING") // PENDING, COMPLETED, REJECTED
-  description String?  // اینجا TXID تتر هم ذخیره می‌شود
-  createdAt   DateTime @default(now())
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount      Decimal           @db.Decimal(10, 4)
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  description String?
+  metadata    Json?             // اطلاعات اضافی (txHash, planDetails, etc.)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
 }
 
-// 🎟️ کدهای تخفیف و هدیه
+enum TransactionType {
+  DEPOSIT        // شارژ کیف پول
+  PURCHASE       // خرید اشتراک
+  RENEWAL        // تمدید اشتراک
+  REFERRAL_BONUS // پاداش دعوت
+  AGENT_UPGRADE  // ارتقا به نمایندگی
+  GIFT           // هدیه ادمین
+  REFUND         // بازگشت وجه
+  SPIN_REWARD    // جایزه گردونه
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================================
+// DEPOSIT REQUEST — درخواست شارژ با کریپتو
+// ============================================================
+model DepositRequest {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount    Decimal       @db.Decimal(10, 4) // مقدار USDT
+  txHash    String?       @unique            // هش تراکنش بلاکچین
+  network   String        @default("TRC20")  // شبکه (TRC20, ERC20, BSC)
+  walletAddress String                        // آدرس کیف پول مقصد
+  status    DepositStatus @default(PENDING)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([txHash])
+  @@index([status])
+}
+
+enum DepositStatus {
+  PENDING    // در انتظار تایید
+  VERIFYING  // در حال بررسی
+  COMPLETED  // تایید شده
+  REJECTED   // رد شده
+}
+
+// ============================================================
+// PROMO CODE — کدهای تخفیف
+// ============================================================
 model PromoCode {
   id          Int      @id @default(autoincrement())
   code        String   @unique
-  discount    Int      // درصد تخفیف
+  discount    Int      // درصد تخفیف (0-100)
   usageLimit  Int      @default(1)
   usedCount   Int      @default(0)
+  isActive    Boolean  @default(true)
   expiresAt   DateTime
+  createdBy   Int?     // adminId
+
+  createdAt DateTime @default(now())
+
+  @@index([code])
+}
+
+// ============================================================
+// PLAN — پلن‌های VPN
+// ============================================================
+model Plan {
+  id          Int     @id @default(autoincrement())
+  name        String  // "پلن طلایی"
+  slug        String  @unique // "gold-30"
+  description String?
+  emoji       String? // "🥇"
+
+  priceUSDT   Decimal @db.Decimal(10, 4)
+  durationDays Int
+  dataLimitGB  Decimal? @db.Decimal(10, 2) // null = نامحدود
+  maxDevices   Int     @default(5)
+
+  inboundId   Int     // شماره inbound در 3x-ui
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ============================================================
+// SERVER — سرورهای VPN
+// ============================================================
+model Server {
+  id          Int    @id @default(autoincrement())
+  name        String // "آلمان - Frankfurt 1"
+  flag        String // "🇩🇪"
+  location    String // "Germany"
+  host        String // IP یا دامنه
+  port        Int    @default(443)
+  protocol    String @default("VLESS_REALITY")
+  isActive    Boolean @default(true)
+  load        Int     @default(0) // درصد بار سرور
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -1,5 +1,5 @@
 // src/lib/prisma.ts
-// Singleton PrismaClient — جلوگیری از ساخت connection جدید در هر request
+// Prisma Client — Singleton Pattern برای جلوگیری از connection leak
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
@@ -9,7 +9,10 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
   });
 
 if (process.env.NODE_ENV !== 'production') {

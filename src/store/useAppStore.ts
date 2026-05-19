@@ -1,83 +1,60 @@
 // src/store/useAppStore.ts
+// Zustand Global Store — نسخه کامل
 import { create } from 'zustand';
-import type { AppUser, AppNotification } from '@/lib/types';
+import type { SerializedUser } from '@/lib/actions/user.action';
 
-interface AppState {
-  // کاربر
-  user: AppUser | null;
-  isLoading: boolean;
-  isInitialized: boolean;
+type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
-  // نوتیفیکیشن
-  notifications: AppNotification[];
-
-  // Actions
-  fetchUser: (telegramId: string) => Promise<void>;
-  setUser: (user: AppUser) => void;
-  updateBalance: (newBalance: number) => void;
-
-  // Notification actions
-  showNotification: (message: string, type?: AppNotification['type'], duration?: number) => void;
-  dismissNotification: (id: string) => void;
+interface Notification {
+  id: string;
+  message: string;
+  type: NotificationType;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+interface AppStore {
+  // 👤 User State
+  user: SerializedUser | null;
+  isLoading: boolean;
+  setUser: (user: SerializedUser | null) => void;
+  setLoading: (loading: boolean) => void;
+
+  // 🔔 Notification System
+  notifications: Notification[];
+  showNotification: (message: string, type?: NotificationType) => void;
+  removeNotification: (id: string) => void;
+
+  // 🎡 Spin State
+  isSpinning: boolean;
+  setSpinning: (spinning: boolean) => void;
+}
+
+export const useAppStore = create<AppStore>((set) => ({
+  // User
   user: null,
-  isLoading: false,
-  isInitialized: false,
-  notifications: [],
-
-  fetchUser: async (telegramId: string) => {
-    if (get().isLoading) return;
-    set({ isLoading: true });
-
-    try {
-      const res = await fetch('/api/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId }),
-      });
-
-      if (res.ok) {
-        const user: AppUser = await res.json();
-        set({ user, isLoading: false, isInitialized: true });
-      } else {
-        // کاربر جدید — ثبت اتوماتیک
-        const regRes = await fetch('/api/user/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegramId }),
-        });
-        if (regRes.ok) {
-          const newUser: AppUser = await regRes.json();
-          set({ user: newUser, isLoading: false, isInitialized: true });
-        }
-      }
-    } catch (error) {
-      console.error('fetchUser error:', error);
-      set({ isLoading: false, isInitialized: true });
-    }
-  },
-
+  isLoading: true,
   setUser: (user) => set({ user }),
+  setLoading: (loading) => set({ isLoading: loading }),
 
-  updateBalance: (newBalance) =>
+  // Notifications
+  notifications: [],
+  showNotification: (message, type = 'info') => {
+    const id = Math.random().toString(36).slice(2);
     set((state) => ({
-      user: state.user ? { ...state.user, balance: newBalance } : null,
-    })),
-
-  showNotification: (message, type = 'info', duration = 3500) => {
-    const id = crypto.randomUUID();
-    set((state) => ({
-      notifications: [...state.notifications, { id, message, type, duration }],
+      notifications: [...state.notifications, { id, message, type }],
     }));
+    // خودکار بعد از ۳.۵ ثانیه حذف شه
     setTimeout(() => {
-      get().dismissNotification(id);
-    }, duration);
+      set((state) => ({
+        notifications: state.notifications.filter((n) => n.id !== id),
+      }));
+    }, 3500);
   },
-
-  dismissNotification: (id) =>
+  removeNotification: (id) =>
     set((state) => ({
       notifications: state.notifications.filter((n) => n.id !== id),
     })),
+
+  // Spin
+  isSpinning: false,
+  setSpinning: (spinning) => set({ isSpinning: spinning }),
 }));
